@@ -1,0 +1,67 @@
+═══════════════════════════════════════════════════════════════
+    URIs DE REDIRECIONAMENTO PARA GOOGLE CLOUD CONSOLE
+═══════════════════════════════════════════════════════════════
+
+📍 ONDE ADICIONAR:
+   Google Cloud Console → APIs & Services → Credentials →
+   OAuth 2.0 Client ID → Authorized redirect URIs
+
+───────────────────────────────────────────────────────────────
+
+✅ ADICIONE ESTAS URIs (copie e cole exatamente):
+
+1. Supabase Auth (ESSENCIAL - sem isso NÃO funciona!):
+   https://iltnqfbyrdcmlhrlwuwn.supabase.co/auth/v1/callback
+
+2. Bolt.new (WebContainer):
+   https://[SEU-PROJETO].webcontainer-api.io/auth/callback
+
+   ⚠️ IMPORTANTE: Substitua [SEU-PROJETO] pela URL real que aparece
+   no seu navegador quando você acessa o app no Bolt.new
+
+3. Desenvolvimento Local (se rodar localmente no futuro):
+   http://localhost:5173/auth/callback
+
+───────────────────────────────────────────────────────────────
+
+🔧 CONFIGURAÇÃO NO SUPABASE DASHBOARD:
+
+1. Acesse: https://supabase.com/dashboard/project/iltnqfbyrdcmlhrlwuwn/auth/url-configuration
+
+2. Em "Site URL", adicione a URL do seu Bolt.new:
+   https://[SEU-PROJETO].webcontainer-api.io
+
+3. Em "Redirect URLs", adicione:
+   https://[SEU-PROJETO].webcontainer-api.io/**
+
+   ⚠️ O /** no final é importante para permitir qualquer subrota!
+
+───────────────────────────────────────────────────────────────
+
+📋 CHECKLIST RÁPIDO:
+
+□ Google Calendar API habilitada
+□ URI do Supabase adicionada no Google Cloud Console
+□ URI do Bolt.new adicionada no Google Cloud Console
+□ Site URL configurada no Supabase Dashboard
+□ Redirect URLs configurada no Supabase Dashboard
+□ OAuth Consent Screen configurada
+□ Scopes incluem: https://www.googleapis.com/auth/calendar.events
+□ Seu email como test user (se app External)
+
+───────────────────────────────────────────────────────────────
+
+⚡ TESTE:
+1. Faça login como Atendente
+2. Vá em Configurações
+3. Clique "Conectar com Google"
+4. Autorize o acesso
+5. Deve mostrar "Conta Google Conectada ✓"
+
+───────────────────────────────────────────────────────────────
+
+🔗 Links úteis:
+   - Google Cloud Console: https://console.cloud.google.com/
+   - Supabase Dashboard: https://supabase.com/dashboard
+
+═══════════════════════════════════════════════════════════════
