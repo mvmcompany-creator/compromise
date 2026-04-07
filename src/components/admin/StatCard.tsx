@@ -23,5 +23,3 @@ export default function StatCard({ title, value, icon: Icon, iconColor, iconBg }
     </div>
   );
 }
-
-[eeeeee]
