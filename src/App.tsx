@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import { Routes, Route, Navigate, useNavigate } from 'react-router-dom';
 import PublicBooking from './pages/PublicBooking';
 import ManagerDashboard from './pages/ManagerDashboard';
 import AttendantDashboard from './pages/AttendantDashboard';
@@ -10,39 +11,88 @@ import { userProfileApi } from './lib/userApi';
 import { UserProfile } from './types';
 import { googleAuthService } from './lib/googleAuth';
 
-type AppMode = 'public' | 'login' | 'signup' | 'dashboard';
+type TeamView = 'login' | 'signup';
+
+function TeamPortal({
+  onLogin,
+  onSignup,
+  isLoading,
+}: {
+  onLogin: (email: string, password: string) => Promise<void>;
+  onSignup: (email: string, password: string, fullName: string, role: 'manager') => Promise<void>;
+  isLoading: boolean;
+}) {
+  const [view, setView] = useState<TeamView>('login');
+
+  return (
+    <>
+      {view === 'login' && (
+        <LoginForm onLogin={onLogin} onSwitchToSignup={() => setView('signup')} />
+      )}
+      {view === 'signup' && (
+        <SignupForm onSignup={onSignup} onBackToLogin={() => setView('login')} />
+      )}
+    </>
+  );
+}
+
+function PrivateRoute({
+  currentUser,
+  isLoading,
+  children,
+}: {
+  currentUser: UserProfile | null;
+  isLoading: boolean;
+  children: React.ReactNode;
+}) {
+  if (isLoading) {
+    return (
+      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+        <div className="text-center">
+          <div className="w-16 h-16 border-4 border-gray-900 border-t-transparent rounded-full animate-spin mx-auto mb-4"></div>
+          <p className="text-gray-600">Carregando...</p>
+        </div>
+      </div>
+    );
+  }
+  if (!currentUser) {
+    return <Navigate to="/acesso-equipe-arcs" replace />;
+  }
+  return <>{children}</>;
+}
 
 function App() {
-  const [mode, setMode] = useState<AppMode>('public');
   const [currentUser, setCurrentUser] = useState<UserProfile | null>(null);
   const [isLoading, setIsLoading] = useState(true);
+  const navigate = useNavigate();
 
   const isAuthCallback = window.location.pathname === '/auth/callback';
 
   useEffect(() => {
     if (isAuthCallback) {
+      setIsLoading(false);
       return;
     }
     checkAuth();
 
-    const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
-      if (event === 'SIGNED_IN' && session?.provider_token) {
-        const expiresAt = session.expires_at || Math.floor(Date.now() / 1000) + 3600;
-
-        try {
-          await googleAuthService.saveGoogleTokens(
-            session.provider_token,
-            session.provider_refresh_token || null,
-            expiresAt
-          );
-
-          const profile = await userProfileApi.getCurrentUser();
-          setCurrentUser(profile);
-          setMode('dashboard');
-        } catch (err) {
-          console.error('Error saving Google tokens:', err);
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
+      (async () => {
+        if (event === 'SIGNED_IN' && session?.provider_token) {
+          const expiresAt = session.expires_at || Math.floor(Date.now() / 1000) + 3600;
+          try {
+            await googleAuthService.saveGoogleTokens(
+              session.provider_token,
+              session.provider_refresh_token || null,
+              expiresAt
+            );
+            const profile = await userProfileApi.getCurrentUser();
+            setCurrentUser(profile);
+            navigate('/dashboard');
+          } catch (err) {
+            console.error('Error saving Google tokens:', err);
+          }
         }
-      }
+      })();
     });
 
     return () => {
@@ -56,7 +106,6 @@ function App() {
       if (session) {
         const profile = await userProfileApi.getCurrentUser();
         setCurrentUser(profile);
-        setMode('dashboard');
       }
     } catch (err) {
       console.error('Error checking auth:', err);
@@ -69,13 +118,9 @@ function App() {
     try {
       setIsLoading(true);
 
-      const { data, error } = await supabase.auth.signInWithPassword({
-        email,
-        password
-      });
+      const { data, error } = await supabase.auth.signInWithPassword({ email, password });
 
       if (error) {
-        console.error('Auth error:', error);
         throw new Error(error.message === 'Invalid login credentials'
           ? 'Email ou senha incorretos'
           : error.message);
@@ -83,7 +128,6 @@ function App() {
 
       if (data.user) {
         await new Promise(resolve => setTimeout(resolve, 300));
-
         const profile = await userProfileApi.getCurrentUser();
 
         if (!profile) {
@@ -92,7 +136,7 @@ function App() {
 
         if (profile.role !== 'manager' && profile.role !== 'attendant') {
           await supabase.auth.signOut();
-          throw new Error('Acesso não autorizado. Apenas managers e atendentes podem fazer login.');
+          throw new Error('Acesso não autorizado.');
         }
 
         if (!profile.isActive) {
@@ -101,10 +145,9 @@ function App() {
         }
 
         setCurrentUser(profile);
-        setMode('dashboard');
+        navigate('/dashboard');
       }
     } catch (err: any) {
-      console.error('Login error:', err);
       alert(err.message || 'Erro ao fazer login. Verifique suas credenciais.');
     } finally {
       setIsLoading(false);
@@ -126,11 +169,7 @@ function App() {
           'Content-Type': 'application/json',
           'apikey': import.meta.env.VITE_SUPABASE_ANON_KEY,
         },
-        body: JSON.stringify({
-          email,
-          password,
-          fullName,
-        }),
+        body: JSON.stringify({ email, password, fullName }),
       });
 
       const result = await response.json();
@@ -140,9 +179,7 @@ function App() {
       }
 
       alert('Conta criada com sucesso! Faça login para continuar.');
-      setMode('login');
     } catch (err: any) {
-      console.error('Signup error:', err);
       alert(err.message || 'Erro ao criar conta. Por favor, tente novamente.');
     }
   };
@@ -151,29 +188,13 @@ function App() {
     try {
       await supabase.auth.signOut();
       setCurrentUser(null);
-      setMode('public');
+      navigate('/acesso-equipe-arcs');
     } catch (err) {
       console.error('Logout error:', err);
     }
   };
 
-  const switchToLogin = () => {
-    setMode('login');
-  };
-
-  const switchToSignup = () => {
-    setMode('signup');
-  };
-
-  const switchToPublic = () => {
-    setMode('public');
-  };
-
-  if (isAuthCallback) {
-    return <AuthCallback />;
-  }
-
-  if (isLoading) {
+  if (isLoading && !isAuthCallback) {
     return (
       <div className="min-h-screen bg-gray-50 flex items-center justify-center">
         <div className="text-center">
@@ -185,54 +206,32 @@ function App() {
   }
 
   return (
-    <div className="relative">
-      {mode === 'public' && (
-        <>
-          <PublicBooking />
-          <button
-            onClick={switchToLogin}
-            className="fixed bottom-6 right-6 px-4 py-2 bg-gray-900 text-white text-sm font-medium rounded-lg hover:bg-gray-800 transition-colors shadow-lg"
-          >
-            Login
-          </button>
-        </>
-      )}
+    <Routes>
+      <Route path="/" element={<PublicBooking />} />
 
-      {mode === 'login' && (
-        <>
-          <LoginForm onLogin={handleLogin} onSwitchToSignup={switchToSignup} />
-          <button
-            onClick={switchToPublic}
-            className="fixed bottom-6 right-6 px-4 py-2 bg-white border border-gray-300 text-gray-900 text-sm font-medium rounded-lg hover:bg-gray-50 transition-colors shadow-lg"
-          >
-            Voltar ao Site
-          </button>
-        </>
-      )}
+      <Route
+        path="/acesso-equipe-arcs"
+        element={
+          currentUser
+            ? <Navigate to="/dashboard" replace />
+            : <TeamPortal onLogin={handleLogin} onSignup={handleSignup} isLoading={isLoading} />
+        }
+      />
 
-      {mode === 'signup' && (
-        <>
-          <SignupForm onSignup={handleSignup} onBackToLogin={switchToLogin} />
-          <button
-            onClick={switchToPublic}
-            className="fixed bottom-6 right-6 px-4 py-2 bg-white border border-gray-300 text-gray-900 text-sm font-medium rounded-lg hover:bg-gray-50 transition-colors shadow-lg"
-          >
-            Voltar ao Site
-          </button>
-        </>
-      )}
+      <Route
+        path="/dashboard"
+        element={
+          <PrivateRoute currentUser={currentUser} isLoading={false}>
+            {currentUser?.role === 'manager' && <ManagerDashboard onLogout={handleLogout} />}
+            {currentUser?.role === 'attendant' && <AttendantDashboard onLogout={handleLogout} />}
+          </PrivateRoute>
+        }
+      />
 
-      {mode === 'dashboard' && currentUser && (
-        <>
-          {currentUser.role === 'manager' && (
-            <ManagerDashboard onLogout={handleLogout} />
-          )}
-          {currentUser.role === 'attendant' && (
-            <AttendantDashboard onLogout={handleLogout} />
-          )}
-        </>
-      )}
-    </div>
+      <Route path="/auth/callback" element={<AuthCallback />} />
+
+      <Route path="*" element={<Navigate to="/" replace />} />
+    </Routes>
   );
 }
 

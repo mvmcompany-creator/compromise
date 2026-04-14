@@ -23,7 +23,7 @@ export default function AuthCallback() {
           setStatus('success');
 
           setTimeout(() => {
-            window.location.href = window.location.origin;
+            window.location.href = `${window.location.origin}/dashboard`;
           }, 1500);
         } else {
           setStatus('error');
@@ -71,7 +71,7 @@ export default function AuthCallback() {
             <p className="text-red-600 font-medium">Erro ao conectar</p>
             <p className="text-gray-600 text-sm mt-2">{errorMessage}</p>
             <button
-              onClick={() => window.location.href = window.location.origin}
+              onClick={() => window.location.href = `${window.location.origin}/dashboard`}
               className="mt-4 px-4 py-2 bg-gray-900 text-white rounded-lg hover:bg-gray-800 transition-colors"
             >
               Voltar ao Dashboard
