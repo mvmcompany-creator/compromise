@@ -87,6 +87,18 @@ export const bookingApi = {
     if (error) throw error;
   },
 
+  async reschedule(bookingId: string, newDate: string, newTime: string, newMeetLink?: string): Promise<void> {
+    const updates: Record<string, string> = { date: newDate, time: newTime };
+    if (newMeetLink) updates.meet_link = newMeetLink;
+
+    const { error } = await supabase
+      .from('bookings')
+      .update(updates)
+      .eq('id', bookingId);
+
+    if (error) throw error;
+  },
+
   async getByDateRange(startDate: string, endDate: string): Promise<Booking[]> {
     const { data, error } = await supabase
       .from('bookings')

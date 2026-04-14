@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { UserCheck, UserX, CreditCard as Edit3, Save, X, UserPlus } from 'lucide-react';
+import { UserCheck, UserX, CreditCard as Edit3, X, UserPlus, Wifi, WifiOff, AlertTriangle } from 'lucide-react';
 import { UserProfile } from '../../types';
 
 interface AttendantsManagementProps {
@@ -178,7 +178,19 @@ export default function AttendantsManagement({ attendants, onUpdateAttendant, on
         </div>
       )}
 
-      <div className="grid md:grid-cols-3 gap-4">
+      {attendants.some(a => a.isActive && !a.googleConnected) && (
+        <div className="bg-amber-50 border border-amber-300 rounded-lg p-4 flex items-start gap-3">
+          <AlertTriangle className="w-5 h-5 text-amber-600 flex-shrink-0 mt-0.5" />
+          <div>
+            <p className="text-sm font-semibold text-amber-900 mb-1">Atendentes sem Google conectado</p>
+            <p className="text-sm text-amber-800">
+              {attendants.filter(a => a.isActive && !a.googleConnected).map(a => a.fullName).join(', ')} — estes atendentes <strong>não receberão agendamentos</strong> até conectar o Google.
+            </p>
+          </div>
+        </div>
+      )}
+
+      <div className="grid md:grid-cols-4 gap-4">
         <div className="bg-white rounded-lg border border-gray-200 p-4">
           <p className="text-sm text-gray-600 mb-1">Total de Atendentes</p>
           <p className="text-3xl font-bold text-gray-900">{attendants.length}</p>
@@ -188,8 +200,12 @@ export default function AttendantsManagement({ attendants, onUpdateAttendant, on
           <p className="text-3xl font-bold text-green-600">{totalActiveAttendants}</p>
         </div>
         <div className="bg-white rounded-lg border border-gray-200 p-4">
+          <p className="text-sm text-gray-600 mb-1">Google Conectado</p>
+          <p className="text-3xl font-bold text-blue-600">{totalConnectedToGoogle}</p>
+        </div>
+        <div className="bg-white rounded-lg border border-gray-200 p-4">
           <p className="text-sm text-gray-600 mb-1">Capacidade Diária Total</p>
-          <p className="text-3xl font-bold text-blue-600">{totalDailyCapacity}</p>
+          <p className="text-3xl font-bold text-gray-900">{totalDailyCapacity}</p>
         </div>
       </div>
 
@@ -271,18 +287,23 @@ export default function AttendantsManagement({ attendants, onUpdateAttendant, on
                     </td>
                     <td className="px-6 py-4 text-center">
                       {attendant.googleConnected ? (
-                        <div className="flex flex-col items-center">
-                          <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-green-100 text-green-800">
+                        <div className="flex flex-col items-center gap-1">
+                          <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold bg-green-100 text-green-800">
+                            <Wifi className="w-3 h-3" />
                             Conectado
                           </span>
                           {attendant.googleEmail && (
-                            <span className="text-xs text-gray-500 mt-1">{attendant.googleEmail}</span>
+                            <span className="text-xs text-gray-500">{attendant.googleEmail}</span>
                           )}
                         </div>
                       ) : (
-                        <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-yellow-100 text-yellow-800">
-                          Aguardando
-                        </span>
+                        <div className="flex flex-col items-center gap-1">
+                          <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold bg-red-100 text-red-700">
+                            <WifiOff className="w-3 h-3" />
+                            Desconectado
+                          </span>
+                          <span className="text-xs text-red-500 font-medium">Sem agendamentos</span>
+                        </div>
                       )}
                     </td>
                     <td className="px-6 py-4 text-center">
@@ -488,7 +509,7 @@ export default function AttendantsManagement({ attendants, onUpdateAttendant, on
           <li>• <strong>Clientes femininas são atendidas por atendentes femininas</strong></li>
           <li>• Apenas atendentes com status "Ativo" e limite diário maior que 0 recebem agendamentos</li>
           <li>• Quando um atendente atinge o limite diário, ele é removido da distribuição daquele dia</li>
-          <li>• Conectar o Google Calendar é opcional para sincronização automática</li>
+          <li>• <strong>Conectar o Google é obrigatório</strong> — atendentes sem Google conectado não recebem agendamentos</li>
         </ul>
       </div>
     </div>

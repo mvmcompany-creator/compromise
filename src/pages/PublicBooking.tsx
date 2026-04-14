@@ -1,5 +1,5 @@
-import { useState, useEffect } from 'react';
-import { ArrowLeft, Clock, User, Mail, Phone, Users } from 'lucide-react';
+import { useState, useEffect, useCallback } from 'react';
+import { ArrowLeft, Clock, User, Mail, Phone, Users, AlertCircle, CheckCircle, X } from 'lucide-react';
 import { availabilityApi } from '../lib/availabilityApi';
 import { supabase } from '../lib/supabase';
 import { AvailabilitySettings } from '../types';
@@ -8,6 +8,12 @@ import TimeSlotPicker from '../components/TimeSlotPicker';
 import BookingSuccess from '../components/BookingSuccess';
 
 type BookingStep = 'client-info' | 'calendar' | 'success';
+
+interface Toast {
+  id: string;
+  type: 'error' | 'warning' | 'info';
+  message: string;
+}
 
 const STANDARD_MEETING_DURATION = 30;
 
@@ -18,6 +24,41 @@ const standardMeetingType = {
   description: 'Conversa rápida para discutir suas necessidades',
   color: 'bg-gray-900'
 };
+
+function ToastContainer({ toasts, onDismiss }: { toasts: Toast[]; onDismiss: (id: string) => void }) {
+  if (toasts.length === 0) return null;
+  return (
+    <div className="fixed top-4 right-4 z-50 flex flex-col gap-2 max-w-sm w-full">
+      {toasts.map((toast) => (
+        <div
+          key={toast.id}
+          className={`flex items-start gap-3 px-4 py-3 rounded-lg shadow-lg border animate-in slide-in-from-right duration-300 ${
+            toast.type === 'error'
+              ? 'bg-red-50 border-red-200 text-red-800'
+              : toast.type === 'warning'
+              ? 'bg-amber-50 border-amber-200 text-amber-800'
+              : 'bg-blue-50 border-blue-200 text-blue-800'
+          }`}
+        >
+          {toast.type === 'error' ? (
+            <AlertCircle className="w-5 h-5 flex-shrink-0 mt-0.5" />
+          ) : toast.type === 'warning' ? (
+            <AlertCircle className="w-5 h-5 flex-shrink-0 mt-0.5" />
+          ) : (
+            <CheckCircle className="w-5 h-5 flex-shrink-0 mt-0.5" />
+          )}
+          <p className="text-sm font-medium flex-1">{toast.message}</p>
+          <button
+            onClick={() => onDismiss(toast.id)}
+            className="text-current opacity-60 hover:opacity-100 transition-opacity flex-shrink-0"
+          >
+            <X className="w-4 h-4" />
+          </button>
+        </div>
+      ))}
+    </div>
+  );
+}
 
 export default function PublicBooking() {
   const [step, setStep] = useState<BookingStep>('client-info');
@@ -39,7 +80,21 @@ export default function PublicBooking() {
   const [availabilitySettings, setAvailabilitySettings] = useState<AvailabilitySettings | null>(null);
   const [availableSlots, setAvailableSlots] = useState<string[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+  const [isCreatingMeet, setIsCreatingMeet] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [toasts, setToasts] = useState<Toast[]>([]);
+
+  const addToast = useCallback((type: Toast['type'], message: string) => {
+    const id = Math.random().toString(36).substring(2);
+    setToasts((prev) => [...prev, { id, type, message }]);
+    setTimeout(() => {
+      setToasts((prev) => prev.filter((t) => t.id !== id));
+    }, 6000);
+  }, []);
+
+  const dismissToast = useCallback((id: string) => {
+    setToasts((prev) => prev.filter((t) => t.id !== id));
+  }, []);
 
   useEffect(() => {
     loadData();
@@ -75,22 +130,18 @@ export default function PublicBooking() {
 
       const { data: attendants, error: attendantsError } = await supabase
         .from('profiles')
-        .select('id, daily_limit, is_active, gender')
+        .select('id, daily_limit, is_active, gender, google_connected')
         .eq('role', 'attendant')
         .eq('is_active', true)
-        .eq('gender', clientGender);
+        .eq('gender', clientGender)
+        .eq('google_connected', true);
 
       if (attendantsError) {
         throw attendantsError;
       }
 
       if (!attendants || attendants.length === 0) {
-        const allSlots = availabilityApi.generateTimeSlots(
-          availabilitySettings.startTime,
-          availabilitySettings.endTime,
-          availabilitySettings.slotDuration
-        );
-        setAvailableSlots(allSlots);
+        setAvailableSlots([]);
         setIsLoading(false);
         return;
       }
@@ -134,21 +185,22 @@ export default function PublicBooking() {
     if (!selectedDate || !clientGender) return;
 
     setSelectedTime(time);
-    setIsLoading(true);
+    setIsCreatingMeet(true);
 
     try {
       const dateStr = selectedDate.toISOString().split('T')[0];
 
       const { data: attendants } = await supabase
         .from('profiles')
-        .select('id, daily_limit, is_active, gender')
+        .select('id, daily_limit, is_active, gender, google_connected')
         .eq('role', 'attendant')
         .eq('is_active', true)
-        .eq('gender', clientGender);
+        .eq('gender', clientGender)
+        .eq('google_connected', true);
 
       if (!attendants || attendants.length === 0) {
-        alert('Desculpe, não há atendentes disponíveis no momento.');
-        setIsLoading(false);
+        addToast('warning', 'Desculpe, não há atendentes com Google conectado disponíveis no momento. Por favor, tente mais tarde.');
+        setIsCreatingMeet(false);
         return;
       }
 
@@ -170,15 +222,44 @@ export default function PublicBooking() {
       }
 
       if (availableAttendants.length === 0) {
-        alert('Desculpe, todos os atendentes atingiram o limite para esta data. Por favor, escolha outra data.');
-        setIsLoading(false);
+        addToast('warning', 'Desculpe, todos os atendentes atingiram o limite para esta data. Por favor, escolha outra data.');
+        setIsCreatingMeet(false);
         return;
       }
 
       const randomIndex = Math.floor(Math.random() * availableAttendants.length);
       const selectedAttendant = availableAttendants[randomIndex];
 
-      const meetLink = `https://meet.google.com/test-dsm-${Math.random().toString(36).substring(2, 9)}`;
+      const [hours, minutes] = time.split(':').map(Number);
+      const startDateTime = new Date(selectedDate);
+      startDateTime.setHours(hours, minutes, 0, 0);
+
+      const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
+      const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
+
+      const meetResponse = await fetch(`${supabaseUrl}/functions/v1/create-google-meet-event`, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${supabaseAnonKey}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          attendantId: selectedAttendant.id,
+          clientName,
+          clientEmail,
+          startTime: startDateTime.toISOString(),
+          duration: STANDARD_MEETING_DURATION,
+          meetingType: 'Reunião de 30 minutos',
+        }),
+      });
+
+      const meetResult = await meetResponse.json();
+
+      if (!meetResult.success || !meetResult.meetLink) {
+        throw new Error(meetResult.error || 'Falha ao criar link do Google Meet');
+      }
+
+      const meetLink = meetResult.meetLink;
 
       const { data: bookingResult, error: bookingError } = await supabase
         .from('bookings')
@@ -188,7 +269,7 @@ export default function PublicBooking() {
           client_phone: clientPhone,
           client_gender: clientGender,
           meeting_type: 'Reunião de 30 minutos',
-          reason: 'Agendamento de Teste DSM',
+          reason: 'Agendamento via sistema',
           date: dateStr,
           time: time,
           meet_link: meetLink,
@@ -210,11 +291,11 @@ export default function PublicBooking() {
       });
       setStep('success');
 
-    } catch (err) {
+    } catch (err: any) {
       console.error('Error creating booking:', err);
-      alert('Erro ao criar agendamento. Por favor, tente novamente.');
+      addToast('error', 'Erro ao criar agendamento. Por favor, tente novamente.');
     } finally {
-      setIsLoading(false);
+      setIsCreatingMeet(false);
     }
   };
 
@@ -280,6 +361,8 @@ export default function PublicBooking() {
 
   return (
     <div className="min-h-screen bg-gray-50">
+      <ToastContainer toasts={toasts} onDismiss={dismissToast} />
+
       <div className="max-w-5xl mx-auto px-4 py-12">
         <div className="text-center mb-8">
           <h1 className="text-4xl font-bold text-gray-900 mb-3">Compromise</h1>
@@ -462,6 +545,14 @@ export default function PublicBooking() {
                     <div className="w-8 h-8 border-4 border-gray-900 border-t-transparent rounded-full animate-spin mb-3"></div>
                     <p className="text-sm text-gray-600">Carregando horários...</p>
                   </div>
+                ) : availableSlots.length === 0 ? (
+                  <div className="bg-amber-50 rounded-lg border border-amber-200 p-6 text-center">
+                    <AlertCircle className="w-10 h-10 text-amber-500 mx-auto mb-3" />
+                    <p className="text-amber-800 font-medium mb-1">Sem horários disponíveis</p>
+                    <p className="text-sm text-amber-700">
+                      Não há atendentes disponíveis para esta data. Por favor, escolha outra data.
+                    </p>
+                  </div>
                 ) : (
                   <TimeSlotPicker
                     slots={availableSlots}
@@ -471,6 +562,16 @@ export default function PublicBooking() {
                   />
                 )}
               </div>
+            </div>
+          </div>
+        )}
+
+        {isCreatingMeet && (
+          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+            <div className="bg-white rounded-2xl p-8 max-w-sm w-full mx-4 text-center shadow-2xl">
+              <div className="w-16 h-16 border-4 border-gray-900 border-t-transparent rounded-full animate-spin mx-auto mb-4"></div>
+              <h3 className="text-lg font-semibold text-gray-900 mb-2">Criando sua reunião...</h3>
+              <p className="text-gray-600 text-sm">Gerando o link do Google Meet e confirmando o agendamento</p>
             </div>
           </div>
         )}

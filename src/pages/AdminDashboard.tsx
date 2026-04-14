@@ -1,5 +1,5 @@
-import { useState, useMemo, useEffect } from 'react';
-import { Calendar, CalendarClock, LogOut, Settings, LayoutDashboard, Link as LinkIcon } from 'lucide-react';
+import { useState, useMemo, useEffect, useCallback } from 'react';
+import { Calendar, CalendarClock, LogOut, Settings, LayoutDashboard, Link as LinkIcon, AlertCircle, X } from 'lucide-react';
 import { Booking, WorkingHours, BlockedTime } from '../types';
 import { bookingApi, workingHoursApi, blockedTimesApi } from '../lib/api';
 import StatCard from '../components/admin/StatCard';
@@ -7,6 +7,7 @@ import BookingsTable from '../components/admin/BookingsTable';
 import AvailabilitySettings from '../components/admin/AvailabilitySettings';
 import CalendarView from '../components/admin/CalendarView';
 import BookingDetailsModal from '../components/admin/BookingDetailsModal';
+import RescheduleModal from '../components/admin/RescheduleModal';
 
 interface AdminDashboardProps {
   onLogout: () => void;
@@ -20,7 +21,14 @@ export default function AdminDashboard({ onLogout }: AdminDashboardProps) {
   const [workingHours, setWorkingHours] = useState<WorkingHours[]>([]);
   const [blockedTimes, setBlockedTimes] = useState<BlockedTime[]>([]);
   const [selectedBooking, setSelectedBooking] = useState<Booking | null>(null);
+  const [rescheduleBooking, setRescheduleBooking] = useState<Booking | null>(null);
   const [isLoading, setIsLoading] = useState(true);
+  const [toastMessage, setToastMessage] = useState<string | null>(null);
+
+  const showToast = useCallback((message: string) => {
+    setToastMessage(message);
+    setTimeout(() => setToastMessage(null), 5000);
+  }, []);
 
   useEffect(() => {
     loadData();
@@ -77,12 +85,22 @@ export default function AdminDashboard({ onLogout }: AdminDashboardProps) {
       );
     } catch (err) {
       console.error('Error cancelling booking:', err);
-      alert('Erro ao cancelar agendamento. Por favor, tente novamente.');
+      showToast('Erro ao cancelar agendamento. Por favor, tente novamente.');
     }
   };
 
   const handleRescheduleBooking = (bookingId: string) => {
-    alert('Funcionalidade de remarcação será implementada na integração completa');
+    const booking = bookings.find(b => b.id === bookingId);
+    if (booking) setRescheduleBooking(booking);
+  };
+
+  const handleRescheduled = (bookingId: string, newDate: string, newTime: string, newMeetLink?: string) => {
+    setBookings(prev =>
+      prev.map(b => b.id === bookingId
+        ? { ...b, date: newDate, time: newTime, ...(newMeetLink ? { meetLink: newMeetLink } : {}) }
+        : b
+      )
+    );
   };
 
   const handleAddBlockedTime = async (blockedTime: Omit<BlockedTime, 'id'>) => {
@@ -91,7 +109,7 @@ export default function AdminDashboard({ onLogout }: AdminDashboardProps) {
       setBlockedTimes(prev => [...prev, newBlock]);
     } catch (err) {
       console.error('Error adding blocked time:', err);
-      alert('Erro ao adicionar bloqueio. Por favor, tente novamente.');
+      showToast('Erro ao adicionar bloqueio. Por favor, tente novamente.');
     }
   };
 
@@ -101,7 +119,7 @@ export default function AdminDashboard({ onLogout }: AdminDashboardProps) {
       setBlockedTimes(prev => prev.filter(bt => bt.id !== id));
     } catch (err) {
       console.error('Error removing blocked time:', err);
-      alert('Erro ao remover bloqueio. Por favor, tente novamente.');
+      showToast('Erro ao remover bloqueio. Por favor, tente novamente.');
     }
   };
 
@@ -119,7 +137,7 @@ export default function AdminDashboard({ onLogout }: AdminDashboardProps) {
       setWorkingHours(updatedHours);
     } catch (err) {
       console.error('Error updating working hours:', err);
-      alert('Erro ao atualizar horários. Por favor, tente novamente.');
+      showToast('Erro ao atualizar horários. Por favor, tente novamente.');
     }
   };
 
@@ -144,6 +162,15 @@ export default function AdminDashboard({ onLogout }: AdminDashboardProps) {
 
   return (
     <div className="min-h-screen bg-gray-50">
+      {toastMessage && (
+        <div className="fixed top-4 right-4 z-50 flex items-start gap-3 px-4 py-3 bg-red-50 border border-red-200 text-red-800 rounded-lg shadow-lg max-w-sm">
+          <AlertCircle className="w-5 h-5 flex-shrink-0 mt-0.5" />
+          <p className="text-sm font-medium flex-1">{toastMessage}</p>
+          <button onClick={() => setToastMessage(null)} className="text-red-600 hover:text-red-800 flex-shrink-0">
+            <X className="w-4 h-4" />
+          </button>
+        </div>
+      )}
       <nav className="bg-white border-b border-gray-200">
         <div className="max-w-7xl mx-auto px-4 py-4">
           <div className="flex items-center justify-between">
@@ -319,6 +346,14 @@ export default function AdminDashboard({ onLogout }: AdminDashboardProps) {
           booking={selectedBooking}
           onClose={() => setSelectedBooking(null)}
           onCancel={handleCancelBooking}
+        />
+      )}
+
+      {rescheduleBooking && (
+        <RescheduleModal
+          booking={rescheduleBooking}
+          onClose={() => setRescheduleBooking(null)}
+          onRescheduled={handleRescheduled}
         />
       )}
     </div>

@@ -1,5 +1,5 @@
-import { useState, useEffect } from 'react';
-import { Calendar, LogOut, Link as LinkIcon, User } from 'lucide-react';
+import { useState, useEffect, useCallback } from 'react';
+import { Calendar, LogOut, Link as LinkIcon, User, AlertCircle, X } from 'lucide-react';
 import { UserProfile, Booking } from '../types';
 import { userProfileApi } from '../lib/userApi';
 import { bookingApi } from '../lib/api';
@@ -19,6 +19,12 @@ export default function AttendantDashboard({ onLogout }: AttendantDashboardProps
   const [currentUser, setCurrentUser] = useState<UserProfile | null>(null);
   const [myBookings, setMyBookings] = useState<Booking[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+  const [toastMessage, setToastMessage] = useState<{ type: 'error' | 'info'; text: string } | null>(null);
+
+  const showToast = useCallback((type: 'error' | 'info', text: string) => {
+    setToastMessage({ type, text });
+    setTimeout(() => setToastMessage(null), 5000);
+  }, []);
 
   useEffect(() => {
     loadData();
@@ -46,7 +52,7 @@ export default function AttendantDashboard({ onLogout }: AttendantDashboardProps
       await googleAuthService.signInWithGoogle();
     } catch (err) {
       console.error('Error connecting to Google:', err);
-      alert('Erro ao conectar com Google. Por favor, tente novamente.');
+      showToast('error', 'Erro ao conectar com Google. Por favor, tente novamente.');
     }
   };
 
@@ -56,7 +62,7 @@ export default function AttendantDashboard({ onLogout }: AttendantDashboardProps
       await loadData();
     } catch (err) {
       console.error('Error disconnecting Google:', err);
-      alert('Erro ao desconectar Google. Por favor, tente novamente.');
+      showToast('error', 'Erro ao desconectar Google. Por favor, tente novamente.');
     }
   };
 
@@ -79,6 +85,19 @@ export default function AttendantDashboard({ onLogout }: AttendantDashboardProps
 
   return (
     <div className="min-h-screen bg-gray-50">
+      {toastMessage && (
+        <div className={`fixed top-4 right-4 z-50 flex items-start gap-3 px-4 py-3 rounded-lg shadow-lg max-w-sm border ${
+          toastMessage.type === 'error'
+            ? 'bg-red-50 border-red-200 text-red-800'
+            : 'bg-blue-50 border-blue-200 text-blue-800'
+        }`}>
+          <AlertCircle className="w-5 h-5 flex-shrink-0 mt-0.5" />
+          <p className="text-sm font-medium flex-1">{toastMessage.text}</p>
+          <button onClick={() => setToastMessage(null)} className="opacity-60 hover:opacity-100 flex-shrink-0">
+            <X className="w-4 h-4" />
+          </button>
+        </div>
+      )}
       <nav className="bg-white border-b border-gray-200">
         <div className="max-w-7xl mx-auto px-4 py-4">
           <div className="flex items-center justify-between">
@@ -125,6 +144,25 @@ export default function AttendantDashboard({ onLogout }: AttendantDashboardProps
       </nav>
 
       <div className="max-w-7xl mx-auto px-4 py-8">
+        {currentUser && !currentUser.googleConnected && (
+          <div className="mb-6 bg-amber-50 border border-amber-300 rounded-lg p-4 flex items-start gap-3">
+            <AlertCircle className="w-5 h-5 text-amber-600 flex-shrink-0 mt-0.5" />
+            <div>
+              <p className="text-sm font-semibold text-amber-900 mb-1">Google nao conectado</p>
+              <p className="text-sm text-amber-800">
+                Voce nao esta recebendo novos agendamentos. Va em{' '}
+                <button
+                  onClick={() => setCurrentView('settings')}
+                  className="underline font-semibold hover:text-amber-900"
+                >
+                  Configuracoes
+                </button>{' '}
+                e conecte sua conta do Google para ativar o recebimento de reunioes.
+              </p>
+            </div>
+          </div>
+        )}
+
         {currentView === 'dashboard' && currentUser && (
           <div>
             <h2 className="text-2xl font-bold text-gray-900 mb-6">Meu Dashboard</h2>
@@ -159,9 +197,9 @@ export default function AttendantDashboard({ onLogout }: AttendantDashboardProps
               />
 
               {!currentUser.googleConnected && (
-                <div className="mt-4 p-4 bg-blue-50 border border-blue-200 rounded-lg">
-                  <p className="text-sm text-blue-800">
-                    <strong>Opcional:</strong> Conecte sua conta do Google para sincronizar agendamentos automaticamente com seu Google Calendar.
+                <div className="mt-4 p-4 bg-red-50 border border-red-200 rounded-lg">
+                  <p className="text-sm text-red-800">
+                    <strong>Obrigatorio:</strong> Conecte sua conta do Google para receber agendamentos. Sem o Google conectado, voce nao aparecera como disponivel para novos clientes.
                   </p>
                 </div>
               )}

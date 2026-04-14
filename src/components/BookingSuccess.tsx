@@ -1,4 +1,5 @@
-import { CheckCircle, Calendar, Clock, Video, X, AlertCircle, ExternalLink } from 'lucide-react';
+import { useState } from 'react';
+import { CheckCircle, Calendar, Clock, Video, X, AlertCircle, ExternalLink, Copy, Check } from 'lucide-react';
 import { MeetingType } from '../types';
 
 interface BookingSuccessProps {
@@ -18,6 +19,7 @@ export default function BookingSuccess({
   meetLink,
   onNewBooking
 }: BookingSuccessProps) {
+  const [copied, setCopied] = useState(false);
 
   const formatDate = (date: Date) => {
     return new Intl.DateTimeFormat('pt-BR', {
@@ -28,9 +30,26 @@ export default function BookingSuccess({
     }).format(date);
   };
 
+  const handleCopyLink = async () => {
+    try {
+      await navigator.clipboard.writeText(meetLink);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2500);
+    } catch {
+      const el = document.createElement('textarea');
+      el.value = meetLink;
+      document.body.appendChild(el);
+      el.select();
+      document.execCommand('copy');
+      document.body.removeChild(el);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2500);
+    }
+  };
+
   return (
     <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-      <div className="bg-white rounded-2xl max-w-lg w-full shadow-2xl animate-in fade-in zoom-in duration-300">
+      <div className="bg-white rounded-2xl max-w-lg w-full shadow-2xl">
         <div className="p-8">
           <div className="flex justify-between items-start mb-6">
             <div className="inline-flex items-center justify-center w-16 h-16 bg-green-100 rounded-full">
@@ -93,16 +112,43 @@ export default function BookingSuccess({
               </div>
               <div className="flex items-start">
                 <Video className="w-5 h-5 mr-3 text-blue-600 mt-0.5 flex-shrink-0" />
-                <div className="flex-1">
+                <div className="flex-1 min-w-0">
                   <p className="text-sm text-gray-500 mb-2">Link do Google Meet</p>
-                  <a
-                    href={meetLink}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="text-blue-600 hover:text-blue-700 font-medium break-all underline"
-                  >
-                    {meetLink}
-                  </a>
+                  <div className="flex items-center gap-2 bg-white rounded-lg border border-gray-200 p-3">
+                    <a
+                      href={meetLink}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="text-blue-600 hover:text-blue-700 font-medium text-sm break-all flex-1 underline underline-offset-2"
+                    >
+                      {meetLink}
+                    </a>
+                    <div className="flex items-center gap-1 flex-shrink-0">
+                      <a
+                        href={meetLink}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="p-1.5 text-gray-500 hover:text-blue-600 hover:bg-blue-50 rounded-md transition-colors"
+                        title="Abrir link"
+                      >
+                        <ExternalLink className="w-4 h-4" />
+                      </a>
+                      <button
+                        onClick={handleCopyLink}
+                        className={`p-1.5 rounded-md transition-colors ${
+                          copied
+                            ? 'text-green-600 bg-green-50'
+                            : 'text-gray-500 hover:text-gray-700 hover:bg-gray-100'
+                        }`}
+                        title={copied ? 'Copiado!' : 'Copiar link'}
+                      >
+                        {copied ? <Check className="w-4 h-4" /> : <Copy className="w-4 h-4" />}
+                      </button>
+                    </div>
+                  </div>
+                  {copied && (
+                    <p className="text-xs text-green-600 font-medium mt-1">Link copiado para a area de transferencia!</p>
+                  )}
                 </div>
               </div>
             </div>
