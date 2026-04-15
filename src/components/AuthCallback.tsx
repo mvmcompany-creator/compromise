@@ -9,7 +9,32 @@ export default function AuthCallback() {
   useEffect(() => {
     const handleAuthCallback = async () => {
       try {
-        const { data: { session } } = await supabase.auth.getSession();
+        const hash = window.location.hash;
+        const hasTokenInHash = hash && (hash.includes('access_token') || hash.includes('code='));
+
+        let session = null;
+
+        if (hasTokenInHash) {
+          await new Promise<void>((resolve) => {
+            const { data: { subscription } } = supabase.auth.onAuthStateChange((event, s) => {
+              if (event === 'SIGNED_IN' && s) {
+                session = s;
+                subscription.unsubscribe();
+                resolve();
+              }
+            });
+
+            setTimeout(() => {
+              subscription.unsubscribe();
+              resolve();
+            }, 5000);
+          });
+        }
+
+        if (!session) {
+          const { data } = await supabase.auth.getSession();
+          session = data.session;
+        }
 
         if (session?.provider_token) {
           const expiresAt = session.expires_at || Math.floor(Date.now() / 1000) + 3600;
@@ -25,9 +50,12 @@ export default function AuthCallback() {
           setTimeout(() => {
             window.location.href = `${window.location.origin}/dashboard`;
           }, 1500);
+        } else if (session && !session.provider_token) {
+          setStatus('error');
+          setErrorMessage('Sessao estabelecida, mas nenhum token do Google foi recebido. Verifique as permissoes e tente novamente.');
         } else {
           setStatus('error');
-          setErrorMessage('Nenhum token recebido do Google. Tente novamente.');
+          setErrorMessage('Nenhuma sessao encontrada. O login pode ter expirado. Tente novamente.');
         }
       } catch (err: any) {
         console.error('Error in auth callback:', err);
@@ -69,13 +97,15 @@ export default function AuthCallback() {
               </svg>
             </div>
             <p className="text-red-600 font-medium">Erro ao conectar</p>
-            <p className="text-gray-600 text-sm mt-2">{errorMessage}</p>
-            <button
-              onClick={() => window.location.href = `${window.location.origin}/dashboard`}
-              className="mt-4 px-4 py-2 bg-gray-900 text-white rounded-lg hover:bg-gray-800 transition-colors"
-            >
-              Voltar ao Dashboard
-            </button>
+            <p className="text-gray-600 text-sm mt-2 max-w-xs">{errorMessage}</p>
+            <div className="mt-4 flex flex-col gap-2 items-center">
+              <button
+                onClick={() => window.location.href = `${window.location.origin}/dashboard`}
+                className="px-4 py-2 bg-gray-900 text-white rounded-lg hover:bg-gray-800 transition-colors text-sm"
+              >
+                Voltar ao Dashboard
+              </button>
+            </div>
           </>
         )}
       </div>
