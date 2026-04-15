@@ -9,56 +9,111 @@ export default function AuthCallback() {
   useEffect(() => {
     const handleAuthCallback = async () => {
       try {
-        const hash = window.location.hash;
-        const hasTokenInHash = hash && (hash.includes('access_token') || hash.includes('code='));
+        console.log('[AuthCallback] URL completa:', window.location.href);
+        console.log('[AuthCallback] Hash:', window.location.hash);
+        console.log('[AuthCallback] Search params:', window.location.search);
 
-        let session = null;
+        await new Promise((resolve) => setTimeout(resolve, 1500));
 
-        if (hasTokenInHash) {
-          await new Promise<void>((resolve) => {
-            const { data: { subscription } } = supabase.auth.onAuthStateChange((event, s) => {
-              if (event === 'SIGNED_IN' && s) {
-                session = s;
-                subscription.unsubscribe();
-                resolve();
-              }
-            });
+        console.log('[AuthCallback] Verificando usuario diretamente no servidor...');
+        const { data: userData, error: userError } = await supabase.auth.getUser();
+        console.log('[AuthCallback] getUser resultado:', { userData, userError });
 
-            setTimeout(() => {
-              subscription.unsubscribe();
-              resolve();
-            }, 5000);
-          });
+        if (userError || !userData.user) {
+          console.log('[AuthCallback] getUser falhou, tentando getSession...');
+          const { data: sessionData } = await supabase.auth.getSession();
+          console.log('[AuthCallback] getSession resultado:', sessionData);
+
+          if (!sessionData.session) {
+            console.log('[AuthCallback] Sem sessao, tentando refreshSession...');
+            const { data: refreshData, error: refreshError } = await supabase.auth.refreshSession();
+            console.log('[AuthCallback] refreshSession resultado:', { refreshData, refreshError });
+
+            if (refreshError || !refreshData.session) {
+              setStatus('error');
+              setErrorMessage('Nenhuma sessao encontrada. O login pode ter expirado. Tente novamente.');
+              return;
+            }
+
+            const session = refreshData.session;
+            if (session.provider_token) {
+              const expiresAt = session.expires_at || Math.floor(Date.now() / 1000) + 3600;
+              await googleAuthService.saveGoogleTokens(
+                session.provider_token,
+                session.provider_refresh_token || null,
+                expiresAt
+              );
+              setStatus('success');
+              setTimeout(() => { window.location.href = `${window.location.origin}/dashboard`; }, 1500);
+            } else {
+              setStatus('error');
+              setErrorMessage('Sessao estabelecida, mas nenhum token do Google foi recebido. Reconecte com o Google e certifique-se de aceitar todas as permissoes.');
+            }
+            return;
+          }
+
+          const session = sessionData.session;
+          console.log('[AuthCallback] Sessao encontrada via getSession:', { hasProviderToken: !!session.provider_token });
+
+          if (session.provider_token) {
+            const expiresAt = session.expires_at || Math.floor(Date.now() / 1000) + 3600;
+            await googleAuthService.saveGoogleTokens(
+              session.provider_token,
+              session.provider_refresh_token || null,
+              expiresAt
+            );
+            setStatus('success');
+            setTimeout(() => { window.location.href = `${window.location.origin}/dashboard`; }, 1500);
+          } else {
+            setStatus('error');
+            setErrorMessage('Sessao estabelecida, mas nenhum token do Google foi recebido. Reconecte com o Google e certifique-se de aceitar todas as permissoes.');
+          }
+          return;
         }
+
+        console.log('[AuthCallback] Usuario autenticado:', userData.user.email);
+        const { data: sessionData } = await supabase.auth.getSession();
+        console.log('[AuthCallback] Sessao apos getUser:', { hasProviderToken: !!sessionData.session?.provider_token });
+
+        const session = sessionData.session;
 
         if (!session) {
-          const { data } = await supabase.auth.getSession();
-          session = data.session;
+          setStatus('error');
+          setErrorMessage('Usuario autenticado, mas sessao nao encontrada. Tente novamente.');
+          return;
         }
 
-        if (session?.provider_token) {
+        if (session.provider_token) {
           const expiresAt = session.expires_at || Math.floor(Date.now() / 1000) + 3600;
-
           await googleAuthService.saveGoogleTokens(
             session.provider_token,
             session.provider_refresh_token || null,
             expiresAt
           );
-
           setStatus('success');
-
-          setTimeout(() => {
-            window.location.href = `${window.location.origin}/dashboard`;
-          }, 1500);
-        } else if (session && !session.provider_token) {
-          setStatus('error');
-          setErrorMessage('Sessao estabelecida, mas nenhum token do Google foi recebido. Verifique as permissoes e tente novamente.');
+          setTimeout(() => { window.location.href = `${window.location.origin}/dashboard`; }, 1500);
         } else {
-          setStatus('error');
-          setErrorMessage('Nenhuma sessao encontrada. O login pode ter expirado. Tente novamente.');
+          console.log('[AuthCallback] Sem provider_token, tentando refreshSession...');
+          const { data: refreshData, error: refreshError } = await supabase.auth.refreshSession();
+          console.log('[AuthCallback] refreshSession resultado:', { refreshData, refreshError });
+
+          if (!refreshError && refreshData.session?.provider_token) {
+            const s = refreshData.session;
+            const expiresAt = s.expires_at || Math.floor(Date.now() / 1000) + 3600;
+            await googleAuthService.saveGoogleTokens(
+              s.provider_token!,
+              s.provider_refresh_token || null,
+              expiresAt
+            );
+            setStatus('success');
+            setTimeout(() => { window.location.href = `${window.location.origin}/dashboard`; }, 1500);
+          } else {
+            setStatus('error');
+            setErrorMessage('Sessao estabelecida, mas nenhum token do Google foi recebido. Reconecte com o Google e certifique-se de aceitar todas as permissoes.');
+          }
         }
       } catch (err: any) {
-        console.error('Error in auth callback:', err);
+        console.error('[AuthCallback] Erro inesperado:', err);
         setStatus('error');
         setErrorMessage(err.message || 'Erro ao conectar com Google');
       }
