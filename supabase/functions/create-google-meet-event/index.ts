@@ -116,24 +116,29 @@ Deno.serve(async (req: Request) => {
     const supabaseUrl = Deno.env.get('SUPABASE_URL') || '';
     const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') || '';
 
-    const { data: tokens, error: tokenError } = await fetch(
-      `${supabaseUrl}/rest/v1/profiles?id=eq.${attendantId}&select=google_access_token,google_refresh_token,google_token_expires_at`,
+    console.log('[create-google-meet-event] Fetching tokens for attendantId:', attendantId);
+
+    const profilesRes = await fetch(
+      `${supabaseUrl}/rest/v1/profiles?id=eq.${attendantId}&select=google_access_token,google_refresh_token,google_token_expires_at,google_connected`,
       {
         headers: {
           'apikey': supabaseServiceKey,
           'Authorization': `Bearer ${supabaseServiceKey}`,
         },
       }
-    ).then(res => res.json());
+    );
 
-    if (tokenError || !tokens || tokens.length === 0) {
-      throw new Error('Attendant not found or Google not connected');
+    const profilesData = await profilesRes.json();
+    console.log('[create-google-meet-event] Profiles query result:', JSON.stringify(profilesData));
+
+    if (!Array.isArray(profilesData) || profilesData.length === 0) {
+      throw new Error(`Atendente não encontrado no banco de dados (id: ${attendantId})`);
     }
 
-    const attendantTokens: GoogleTokens = tokens[0];
+    const attendantTokens: GoogleTokens = profilesData[0];
 
     if (!attendantTokens.google_access_token || !attendantTokens.google_refresh_token) {
-      throw new Error('Google account not connected');
+      throw new Error('O atendente selecionado não tem o Google conectado. Por favor, solicite que o atendente conecte sua conta Google no painel.');
     }
 
     let accessToken = attendantTokens.google_access_token;

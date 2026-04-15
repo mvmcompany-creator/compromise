@@ -15,6 +15,30 @@ export default function AuthCallback() {
 
         await new Promise((resolve) => setTimeout(resolve, 1500));
 
+        const verifyTokensSaved = async () => {
+          const { data: { user } } = await supabase.auth.getUser();
+          if (!user) {
+            setStatus('error');
+            setErrorMessage('Sessao expirou apos salvar tokens. Tente novamente.');
+            return;
+          }
+          const { data: profile } = await supabase
+            .from('profiles')
+            .select('google_connected')
+            .eq('id', user.id)
+            .maybeSingle();
+
+          console.log('[AuthCallback] Verificacao de tokens salvos:', profile);
+
+          if (profile?.google_connected) {
+            setStatus('success');
+            setTimeout(() => { window.location.href = `${window.location.origin}/dashboard`; }, 1500);
+          } else {
+            setStatus('error');
+            setErrorMessage('Login realizado, mas os tokens do Google nao foram salvos no perfil. Verifique as permissoes e tente reconectar.');
+          }
+        };
+
         console.log('[AuthCallback] Verificando usuario diretamente no servidor...');
         const { data: userData, error: userError } = await supabase.auth.getUser();
         console.log('[AuthCallback] getUser resultado:', { userData, userError });
@@ -43,8 +67,7 @@ export default function AuthCallback() {
                 session.provider_refresh_token || null,
                 expiresAt
               );
-              setStatus('success');
-              setTimeout(() => { window.location.href = `${window.location.origin}/dashboard`; }, 1500);
+              await verifyTokensSaved();
             } else {
               setStatus('error');
               setErrorMessage('Sessao estabelecida, mas nenhum token do Google foi recebido. Reconecte com o Google e certifique-se de aceitar todas as permissoes.');
@@ -62,8 +85,7 @@ export default function AuthCallback() {
               session.provider_refresh_token || null,
               expiresAt
             );
-            setStatus('success');
-            setTimeout(() => { window.location.href = `${window.location.origin}/dashboard`; }, 1500);
+            await verifyTokensSaved();
           } else {
             setStatus('error');
             setErrorMessage('Sessao estabelecida, mas nenhum token do Google foi recebido. Reconecte com o Google e certifique-se de aceitar todas as permissoes.');
@@ -90,8 +112,7 @@ export default function AuthCallback() {
             session.provider_refresh_token || null,
             expiresAt
           );
-          setStatus('success');
-          setTimeout(() => { window.location.href = `${window.location.origin}/dashboard`; }, 1500);
+          await verifyTokensSaved();
         } else {
           console.log('[AuthCallback] Sem provider_token, tentando refreshSession...');
           const { data: refreshData, error: refreshError } = await supabase.auth.refreshSession();
@@ -105,8 +126,7 @@ export default function AuthCallback() {
               s.provider_refresh_token || null,
               expiresAt
             );
-            setStatus('success');
-            setTimeout(() => { window.location.href = `${window.location.origin}/dashboard`; }, 1500);
+            await verifyTokensSaved();
           } else {
             setStatus('error');
             setErrorMessage('Sessao estabelecida, mas nenhum token do Google foi recebido. Reconecte com o Google e certifique-se de aceitar todas as permissoes.');

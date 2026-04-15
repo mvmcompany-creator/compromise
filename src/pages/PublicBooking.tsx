@@ -256,7 +256,10 @@ export default function PublicBooking() {
       const meetResult = await meetResponse.json();
 
       if (!meetResult.success || !meetResult.meetLink) {
-        throw new Error(meetResult.error || 'Falha ao criar link do Google Meet');
+        const errorMsg = meetResult.error || 'Falha ao criar link do Google Meet';
+        addToast('error', errorMsg);
+        setIsCreatingMeet(false);
+        return;
       }
 
       const meetLink = meetResult.meetLink;
@@ -293,7 +296,7 @@ export default function PublicBooking() {
 
     } catch (err: any) {
       console.error('Error creating booking:', err);
-      addToast('error', 'Erro ao criar agendamento. Por favor, tente novamente.');
+      addToast('error', err.message || 'Erro ao criar agendamento. Por favor, tente novamente.');
     } finally {
       setIsCreatingMeet(false);
     }
